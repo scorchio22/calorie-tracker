@@ -10,9 +10,7 @@
 
 <div class="w-full max-w-xl flex-1">
 
-<h1 class="text-4xl font-extrabold text-center mb-6 text-gray-800">
-  Calorie Tracker
-</h1>
+<h1 class="text-4xl font-extrabold text-center mb-6 text-gray-800">Calorie Tracker</h1>
 
 <div id="days" class="space-y-5"></div>
 
@@ -27,6 +25,7 @@
 
 </div>
 
+<!-- Reset button sticky bottom -->
 <div class="w-full flex justify-center p-4">
   <button class="bg-red-500 text-white py-2 px-4 rounded-xl shadow hover:bg-red-600 transition"
     onclick="resetWeek()">
@@ -45,8 +44,8 @@ let data = JSON.parse(localStorage.getItem("calories")) || {};
 let dailyGoals = JSON.parse(localStorage.getItem("dailyGoals")) || {};
 
 function getColorClass(percent){
-  if(percent >= 100) return "bg-red-500";
-  if(percent >= 80) return "bg-yellow-400";
+  if(percent>=100) return "bg-red-500";
+  if(percent>=80) return "bg-yellow-400";
   return "bg-green-400";
 }
 
@@ -80,11 +79,9 @@ function render() {
           onchange="setDailyGoal('${day}', this.value)">
 
         <div class="w-full bg-gray-200 h-3 rounded-full mb-1 overflow-hidden">
-          <div class="progress-inner h-3 rounded-full transition-all duration-700"
-               style="width:0%" 
-               data-day="${day}" 
-               data-prev="${displayPercent}" 
-               data-color="${getColorClass(displayPercent)}">
+          <div id="${day}-bar" class="progress-inner h-3 rounded-full transition-all duration-[1500] delay-75"
+               style="width:0%;"
+               data-prev="0">
           </div>
         </div>
         <div class="text-xs text-gray-500 mb-3">${Math.round(percent||0)}%</div>
@@ -120,29 +117,19 @@ function render() {
   document.getElementById("weeklyTotal").innerText = "Weekly Total: " + weeklyTotal;
   document.getElementById("summaryTable").innerHTML = summaryHTML;
 
-  // Animate progress bars smoothly from current → new
-  days.forEach(day => {
-    const bar = document.querySelector(`.progress-inner[data-day="${day}"]`);
-    if(bar){
-      const prev = parseFloat(bar.getAttribute("data-prev")) || 0;
-      const goal = dailyGoals[day] || 0;
-      const total = (data[day] || []).reduce((a,b)=>a+b.cal,0);
-      const newPercent = goal ? (total/goal)*100 : 0;
-      const displayPercent = Math.min(newPercent,100);
-
-      // Set current width first (from previous value)
-      bar.className = `progress-inner ${getColorClass(displayPercent)} h-3 rounded-full transition-all duration-700`;
-      bar.style.width = prev + "%";
-
-      // Force browser to render old width before animating
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          bar.style.width = displayPercent + "%";
-        });
-      });
-
-      bar.setAttribute("data-prev", displayPercent);
-    }
+  // Animate progress bars from previous value
+  days.forEach(day=>{
+    let bar = document.getElementById(day+"-bar");
+    let prev = parseFloat(bar.getAttribute("data-prev")) || 0;
+    let goal = dailyGoals[day] || 0;
+    let total = (data[day] || []).reduce((a,b)=>a+b.cal,0);
+    let percent = goal ? (total/goal)*100 : 0;
+    let displayPercent = Math.min(percent,100);
+    bar.setAttribute("data-prev", displayPercent);
+    bar.className = `progress-inner ${getColorClass(displayPercent)} h-3 rounded-full transition-all duration-[1500] delay-75`;
+    requestAnimationFrame(()=>{ 
+      bar.style.width = displayPercent+"%";
+    });
   });
 }
 
