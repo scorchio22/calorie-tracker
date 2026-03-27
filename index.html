@@ -3,20 +3,9 @@
 <head>
   <title>Calorie Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <style>
-    /* Progress bar animation */
-    .progress-bar {
-      transition: width 1s ease-in-out;
-    }
 
-    /* Sticky reset button */
-    .sticky-reset {
-      position: sticky;
-      bottom: 10px;
-      z-index: 50;
-    }
-  </style>
+  <!-- Mobile viewport fix -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 </head>
 
 <body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen flex flex-col items-center p-4 sm:p-6 md:p-8">
@@ -29,6 +18,7 @@
 
 <div id="days" class="space-y-5"></div>
 
+<!-- Weekly total -->
 <h2 id="weeklyTotal" class="text-2xl font-semibold text-center mt-8 text-gray-700 break-words"></h2>
 
 <!-- SUMMARY -->
@@ -42,7 +32,7 @@
 </div>
 
 <!-- Reset button sticky bottom -->
-<div class="w-full flex justify-center p-4 sticky-reset">
+<div class="w-full flex justify-center p-4 sticky bottom-0 bg-gradient-to-t from-gray-200/80 backdrop-blur">
   <button class="bg-red-500 text-white py-2 px-4 rounded-xl shadow hover:bg-red-600 transition"
     onclick="resetWeek()">
     Reset Week
@@ -59,7 +49,6 @@ const foods = {
 
 let data = JSON.parse(localStorage.getItem("calories")) || {};
 let dailyGoals = JSON.parse(localStorage.getItem("dailyGoals")) || {};
-let currentWidths = {}; // store current widths of progress bars
 
 function render() {
   let html = "";
@@ -95,26 +84,37 @@ function render() {
           value="${goal || ''}"
           onchange="setDailyGoal('${day}', this.value)">
 
+        <!-- Progress bar -->
         <div class="w-full bg-gray-200 h-3 rounded-full mb-1 overflow-hidden">
-          <div id="${day}-bar" class="progress-bar ${color} h-3 rounded-full" style="width: ${currentWidths[day]||0}%"></div>
+          <div id="${day}-bar" class="${color} h-3 rounded-full transition-all duration-700" style="width:${displayPercent}%"></div>
         </div>
-        <div class="text-xs text-gray-500 mb-3">${Math.round(percent||0)}%</div>
+        <div id="${day}-percent" class="text-xs text-gray-500 mb-3">${Math.round(percent||0)}%</div>
 
-        <input 
-          type="text"
-          placeholder="Search or type 'egg 2'"
-          class="border border-gray-200 p-3 rounded-lg w-full mb-1 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg"
-          oninput="showDropdown('${day}', this.value)"
-          onkeydown="handleEnter(event, '${day}')"
-          id="${day}-input"
-        >
+        <!-- Food and grams input -->
+        <div class="flex gap-2 mb-2">
+          <input type="text"
+            placeholder="Search food"
+            class="border border-gray-200 p-2 rounded-lg flex-1 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg"
+            oninput="showDropdown('${day}', this.value)"
+            onkeydown="handleEnter(event, '${day}')"
+            id="${day}-food-input"
+          >
 
+          <select id="${day}-grams-select" class="border border-gray-200 p-2 rounded-lg w-32 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg">
+            ${Array.from({length:20},(_,i)=>50*(i+1)).map(g=>`<option value="${g}">${g}g</option>`).join('')}
+          </select>
+
+          <input type="number" id="${day}-grams-input" class="border border-gray-200 p-2 rounded-lg w-24 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg" placeholder="Custom g">
+        </div>
+
+        <!-- Dropdown suggestions -->
         <div id="${day}-dropdown" class="absolute bg-white border rounded-lg shadow w-full z-10 hidden max-h-48 overflow-y-auto text-base sm:text-lg"></div>
 
+        <!-- Entries list -->
         <ul class="text-sm mt-3 space-y-1">
           ${entries.map((e,i)=>`
             <li class="flex justify-between items-center bg-gray-50 px-3 py-2 rounded-lg">
-              <span>${e.name} (${e.qty})</span>
+              <span>${e.name} (${e.grams}g)</span>
               <div class="flex items-center gap-2">
                 <span class="text-gray-600">${e.cal}</span>
                 <button class="text-red-500 hover:text-red-700" onclick="remove('${day}',${i})">x</button>
@@ -130,26 +130,6 @@ function render() {
   document.getElementById("days").innerHTML = html;
   document.getElementById("weeklyTotal").innerText = "Weekly Total: " + weeklyTotal;
   document.getElementById("summaryTable").innerHTML = summaryHTML;
-
-  // Animate progress bars from current width to new width
-  days.forEach(day => {
-    let goal = dailyGoals[day] || 0;
-    let total = (data[day] || []).reduce((a,b)=>a+b.cal,0);
-    let percent = goal ? (total/goal)*100 : 0;
-    let displayPercent = Math.min(percent,100);
-
-    const bar = document.getElementById(`${day}-bar`);
-    if(bar){
-      const startWidth = currentWidths[day] || 0;
-      const endWidth = displayPercent;
-      bar.style.width = startWidth + "%";
-
-      setTimeout(()=>{
-        bar.style.width = endWidth + "%";
-        currentWidths[day] = endWidth;
-      }, 50); // small delay for animation effect
-    }
-  });
 }
 
 function showDropdown(day, value) {
@@ -157,16 +137,13 @@ function showDropdown(day, value) {
   if (!value) return dropdown.classList.add("hidden");
 
   let input = value.toLowerCase();
-  let qty = (input.match(/\d+/)||[1])[0];
-  let foodWord = input.replace(/\d+/g,"").trim();
-
-  let results = Object.keys(foods).filter(f=>f.includes(foodWord)).slice(0,5);
+  let results = Object.keys(foods).filter(f=>f.includes(input)).slice(0,5);
   if(results.length===0) return dropdown.classList.add("hidden");
 
   dropdown.innerHTML = results.map(food=>`
     <div class="p-2 hover:bg-gray-100 cursor-pointer"
-      onclick="quickAdd('${day}','${food}',${qty})">
-      ${food} x${qty} (${foods[food]*qty} cal)
+      onclick="quickAdd('${day}','${food}')">
+      ${food} (${foods[food]} cal/100g)
     </div>
   `).join('');
 
@@ -175,20 +152,26 @@ function showDropdown(day, value) {
 
 function handleEnter(e,day){
   if(e.key==="Enter"){
-    let input=document.getElementById(day+"-input").value.toLowerCase();
-    let qty=(input.match(/\d+/)||[1])[0];
-    let foodWord=input.replace(/\d+/g,"").trim();
-    let found=Object.keys(foods).find(f=>f.includes(foodWord));
-    if(found) quickAdd(day,found,qty);
+    let input=document.getElementById(day+"-food-input").value.toLowerCase();
+    let found=Object.keys(foods).find(f=>f.includes(input));
+    if(found) quickAdd(day,found);
   }
 }
 
-function quickAdd(day,food,qty){
+function quickAdd(day,food){
+  const gramsSelect = document.getElementById(day+'-grams-select');
+  const gramsInput = document.getElementById(day+'-grams-input');
+  let grams = parseInt(gramsInput.value) || parseInt(gramsSelect.value) || 100;
+  let cal = Math.round(foods[food]*grams/100);
+
   if(!data[day]) data[day]=[];
-  data[day].push({name:food,qty:qty,cal:foods[food]*qty});
+  data[day].push({name:food,grams:grams,cal:cal});
   localStorage.setItem("calories",JSON.stringify(data));
-  document.getElementById(day+"-input").value="";
-  document.getElementById(day+"-dropdown").classList.add("hidden");
+
+  // Reset inputs
+  document.getElementById(day+'-food-input').value="";
+  gramsInput.value="";
+
   render();
 }
 
@@ -208,7 +191,6 @@ function resetWeek(){
   if(confirm("Reset everything?")){
     data={};
     localStorage.clear();
-    currentWidths={};
     render();
   }
 }
