@@ -5,13 +5,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
-    /* Sticky reset button behavior */
-    #reset-container {
-      position: sticky;
-      bottom: 16px;
-      z-index: 50;
-      display: flex;
-      justify-content: center;
+    /* Ensure animation triggers from previous width */
+    .progress-inner {
+      transition: width 0.5s ease;
     }
   </style>
 </head>
@@ -26,8 +22,10 @@
 
 <div id="days" class="space-y-5"></div>
 
+<!-- Weekly total -->
 <h2 id="weeklyTotal" class="text-2xl font-semibold text-center mt-8 text-gray-700 break-words"></h2>
 
+<!-- SUMMARY -->
 <div class="mt-6 bg-white p-5 rounded-2xl shadow-lg overflow-x-auto">
   <h3 class="font-bold text-lg mb-3 text-gray-800">Weekly Summary</h3>
   <table class="min-w-full text-sm text-gray-700">
@@ -35,10 +33,13 @@
   </table>
 </div>
 
+<!-- Bottom spacing to prevent overlap with sticky reset -->
+<div class="h-16"></div>
+
 </div>
 
 <!-- Reset button sticky bottom -->
-<div id="reset-container">
+<div class="fixed bottom-4 left-0 w-full flex justify-center z-50">
   <button class="bg-red-500 text-white py-2 px-4 rounded-xl shadow hover:bg-red-600 transition"
     onclick="resetWeek()">
     Reset Week
@@ -67,12 +68,11 @@ function render() {
 
     let goal = dailyGoals[day] || 0;
     let percent = goal ? (total/goal)*100 : 0;
-
-    let color = "bg-green-400";
-    if(percent >= 80 && percent < 100) color = "bg-yellow-400";
-    if(percent >= 100) color = "bg-red-500";
-
     let displayPercent = Math.min(percent,100);
+
+    let colorClass = "bg-green-400";
+    if(percent >= 80 && percent < 100) colorClass = "bg-yellow-400";
+    if(percent >= 100) colorClass = "bg-red-500";
 
     summaryHTML += `<tr class="border-b"><td class="py-1">${day}</td><td>${total}</td></tr>`;
 
@@ -90,7 +90,7 @@ function render() {
           onchange="setDailyGoal('${day}', this.value)">
 
         <div class="w-full bg-gray-200 h-3 rounded-full mb-1 overflow-hidden">
-          <div class="${color} h-3 rounded-full" style="width:0%" data-target="${displayPercent}"></div>
+          <div class="progress-inner ${colorClass} h-3 rounded-full" style="width:0%" data-target="${displayPercent}"></div>
         </div>
         <div class="text-xs text-gray-500 mb-3">${Math.round(percent||0)}%</div>
 
@@ -125,11 +125,10 @@ function render() {
   document.getElementById("weeklyTotal").innerText = "Weekly Total: " + weeklyTotal;
   document.getElementById("summaryTable").innerHTML = summaryHTML;
 
-  // Animate progress bars
-  document.querySelectorAll(".bg-green-400, .bg-yellow-400, .bg-red-500").forEach(bar => {
+  // Animate all progress bars after DOM update
+  document.querySelectorAll(".progress-inner").forEach(bar => {
     const target = bar.getAttribute("data-target");
     setTimeout(() => {
-      bar.style.transition = "width 0.5s ease";
       bar.style.width = target + "%";
     }, 50);
   });
