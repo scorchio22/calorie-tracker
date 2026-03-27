@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Calorie Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Mobile viewport fix -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+</head>
+
+<body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen flex flex-col items-center p-4 sm:p-6 md:p-8">
+
+<div class="w-full max-w-xl flex-1">
+
+<h1 class="text-4xl font-extrabold text-center mb-6 text-gray-800">
+  Calorie Tracker
+</h1>
+
+<div id="days" class="space-y-5"></div>
+
+<!-- Weekly total -->
+<h2 id="weeklyTotal" class="text-2xl font-semibold text-center mt-8 text-gray-700 break-words"></h2>
+
+<!-- SUMMARY -->
+<div class="mt-6 bg-white p-5 rounded-2xl shadow-lg overflow-x-auto">
+  <h3 class="font-bold text-lg mb-3 text-gray-800">Weekly Summary</h3>
+  <table class="min-w-full text-sm text-gray-700">
+    <tbody id="summaryTable"></tbody>
+  </table>
+</div>
+
+</div>
+
+<!-- Reset button sticky bottom -->
+<div class="w-full flex justify-center p-4">
+  <button class="bg-red-500 text-white py-2 px-4 rounded-xl shadow hover:bg-red-600 transition"
+    onclick="resetWeek()">
+    Reset Week
+  </button>
+</div>
+
+<script>
+const days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const foods = {
+  "apple": 52,"banana": 89,"chicken": 165,"egg": 78,"rice": 130,
+  "potato": 77,"salmon": 206,"broccoli": 34,"carrot": 41,
+  "bread": 265,"cheese": 402,"milk": 61
+};
+let data = JSON.parse(localStorage.getItem("calories")) || {};
+let dailyGoals = JSON.parse(localStorage.getItem("dailyGoals")) || {};
+
+function render() {
+  let html = "";
+  let weeklyTotal = 0;
+  let summaryHTML = "";
+
+  days.forEach(day => {
+    let entries = data[day] || [];
+    let total = entries.reduce((a,b)=>a+b.cal,0);
+    weeklyTotal += total;
+
+    let goal = dailyGoals[day] || 0;
+    let percent = goal ? (total/goal)*100 : 0;
+
+    let color = "bg-green-400";
+    if(percent >= 80 && percent < 100) color = "bg-yellow-400";
+    if(percent >= 100) color = "bg-red-500";
+
+    let displayPercent = Math.min(percent,100);
+
+    summaryHTML += `<tr class="border-b"><td class="py-1">${day}</td><td>${total}</td></tr>`;
+
+    html += `
+      <div class="bg-white p-4 sm:p-5 rounded-2xl shadow-lg relative w-full">
+
+        <div class="flex justify-between items-center mb-2 sm:mb-3">
+          <span class="font-semibold text-lg text-gray-800">${day}</span>
+          <span class="text-gray-600">${total} cal</span>
+        </div>
+
+        <input type="number" placeholder="Daily goal"
+          class="border border-gray-200 p-2 rounded-lg w-full mb-2 sm:mb-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg"
+          value="${goal || ''}"
+          onchange="setDailyGoal('${day}', this.value)">
+
+        <div class="w-full bg-gray-200 h-3 rounded-full mb-1 overflow-hidden">
+          <div class="${color} h-3 rounded-full transition-all duration-300" style="width:${displayPercent}%"></div>
+        </div>
+        <div class="text-xs text-gray-500 mb-3">${Math.round(percent||0)}%</div>
+
+        <input 
+          type="text"
+          placeholder="Search or type 'egg 2'"
+          class="border border-gray-200 p-3 rounded-lg w-full mb-1 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg"
+          oninput="showDropdown('${day}', this.value)"
+          onkeydown="handleEnter(event, '${day}')"
+          id="${day}-input"
+        >
+
+        <div id="${day}-dropdown" class="absolute bg-white border rounded-lg shadow w-full z-10 hidden max-h-48 overflow-y-auto text-base sm:text-lg"></div>
+
+        <ul class="text-sm mt-3 space-y-1">
+          ${entries.map((e,i)=>`
+            <li class="flex justify-between items-center bg-gray-50 px-3 py-2 rounded-lg">
+              <span>${e.name} (${e.qty})</span>
+              <div class="flex items-center gap-2">
+                <span class="text-gray-600">${e.cal}</span>
+                <button class="text-red-500 hover:text-red-700" onclick="remove('${day}',${i})">x</button>
+              </div>
+            </li>
+          `).join('')}
+        </ul>
+
+      </div>
+    `;
+  });
+
+  document.getElementById("days").innerHTML = html;
+  document.getElementById("weeklyTotal").innerText = "Weekly Total: " + weeklyTotal;
+  document.getElementById("summaryTable").innerHTML = summaryHTML;
+}
+
+function showDropdown(day, value) {
+  const dropdown = document.getElementById(day + "-dropdown");
+  if (!value) return dropdown.classList.add("hidden");
+
+  let input = value.toLowerCase();
+  let qty = (input.match(/\d+/)||[1])[0];
+  let foodWord = input.replace(/\d+/g,"").trim();
+
+  let results = Object.keys(foods).filter(f=>f.includes(foodWord)).slice(0,5);
+  if(results.length===0) return dropdown.classList.add("hidden");
+
+  dropdown.innerHTML = results.map(food=>`
+    <div class="p-2 hover:bg-gray-100 cursor-pointer"
+      onclick="quickAdd('${day}','${food}',${qty})">
+      ${food} x${qty} (${foods[food]*qty} cal)
+    </div>
+  `).join('');
+
+  // Ensure dropdown is fully visible on small screens
+  const rect = dropdown.getBoundingClientRect();
+  const bottom = window.innerHeight - rect.bottom;
+  if(bottom < 0) dropdown.style.top = `${rect.top + bottom - 10}px`;
+
+  dropdown.classList.remove("hidden");
+}
+
+function handleEnter(e,day){
+  if(e.key==="Enter"){
+    let input=document.getElementById(day+"-input").value.toLowerCase();
+    let qty=(input.match(/\d+/)||[1])[0];
+    let foodWord=input.replace(/\d+/g,"").trim();
+    let found=Object.keys(foods).find(f=>f.includes(foodWord));
+    if(found) quickAdd(day,found,qty);
+  }
+}
+
+function quickAdd(day,food,qty){
+  if(!data[day]) data[day]=[];
+  data[day].push({name:food,qty:qty,cal:foods[food]*qty});
+  localStorage.setItem("calories",JSON.stringify(data));
+  document.getElementById(day+"-input").value="";
+  document.getElementById(day+"-dropdown").classList.add("hidden");
+  render();
+}
+
+function remove(day,i){
+  data[day].splice(i,1);
+  localStorage.setItem("calories",JSON.stringify(data));
+  render();
+}
+
+function setDailyGoal(day,val){
+  dailyGoals[day]=parseInt(val)||0;
+  localStorage.setItem("dailyGoals",JSON.stringify(dailyGoals));
+  render();
+}
+
+function resetWeek(){
+  if(confirm("Reset everything?")){
+    data={};
+    localStorage.clear();
+    render();
+  }
+}
+
+render();
+</script>
+
+</body>
+</html>
