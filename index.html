@@ -3,6 +3,8 @@
 <head>
   <title>Calorie Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Mobile viewport fix -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 </head>
 
@@ -16,8 +18,10 @@
 
 <div id="days" class="space-y-5"></div>
 
+<!-- Weekly total -->
 <h2 id="weeklyTotal" class="text-2xl font-semibold text-center mt-8 text-gray-700 break-words"></h2>
 
+<!-- SUMMARY -->
 <div class="mt-6 bg-white p-5 rounded-2xl shadow-lg overflow-x-auto">
   <h3 class="font-bold text-lg mb-3 text-gray-800">Weekly Summary</h3>
   <table class="min-w-full text-sm text-gray-700">
@@ -27,7 +31,8 @@
 
 </div>
 
-<div class="w-full flex justify-center p-4 sticky bottom-0 bg-gradient-to-t from-gray-200/80 backdrop-blur">
+<!-- Reset button sticky bottom -->
+<div class="w-full flex justify-center p-4">
   <button class="bg-red-500 text-white py-2 px-4 rounded-xl shadow hover:bg-red-600 transition"
     onclick="resetWeek()">
     Reset Week
@@ -41,9 +46,9 @@ const foods = {
   "potato": 77,"salmon": 206,"broccoli": 34,"carrot": 41,
   "bread": 265,"cheese": 402,"milk": 61
 };
-
 let data = JSON.parse(localStorage.getItem("calories")) || {};
 let dailyGoals = JSON.parse(localStorage.getItem("dailyGoals")) || {};
+let barWidths = {}; // track current widths for animation
 
 function render() {
   let html = "";
@@ -57,14 +62,17 @@ function render() {
 
     let goal = dailyGoals[day] || 0;
     let percent = goal ? (total/goal)*100 : 0;
+    let displayPercent = Math.min(percent,100);
+
+    summaryHTML += `<tr class="border-b"><td class="py-1">${day}</td><td>${total}</td></tr>`;
+
+    // track previous width for animation
+    let prevWidth = barWidths[day] || 0;
+    barWidths[day] = displayPercent;
 
     let color = "bg-green-400";
     if(percent >= 80 && percent < 100) color = "bg-yellow-400";
     if(percent >= 100) color = "bg-red-500";
-
-    let displayPercent = Math.min(percent,100);
-
-    summaryHTML += `<tr class="border-b"><td class="py-1">${day}</td><td>${total}</td></tr>`;
 
     html += `
       <div class="bg-white p-4 sm:p-5 rounded-2xl shadow-lg relative w-full">
@@ -79,34 +87,34 @@ function render() {
           value="${goal || ''}"
           onchange="setDailyGoal('${day}', this.value)">
 
+        <!-- Animated progress bar -->
         <div class="w-full bg-gray-200 h-3 rounded-full mb-1 overflow-hidden">
-          <div id="${day}-bar" class="${color} h-3 rounded-full transition-all duration-700" style="width:${displayPercent}%"></div>
+          <div id="${day}-bar" class="${color} h-3 rounded-full" style="width:${prevWidth}%"></div>
         </div>
-        <div id="${day}-percent" class="text-xs text-gray-500 mb-3">${Math.round(percent||0)}%</div>
+        <div class="text-xs text-gray-500 mb-3">${Math.round(percent||0)}%</div>
 
-        <!-- Food selection + grams + add button -->
-        <div class="flex gap-2 mb-2 items-center flex-wrap">
-          <input list="${day}-food-list" id="${day}-food-combo"
-            placeholder="Select or type food"
-            class="border border-gray-200 p-2 rounded-lg flex-1 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg">
-
-          <datalist id="${day}-food-list">
-            ${Object.keys(foods).map(f=>`<option value="${f}">${f} (${foods[f]} cal/100g)</option>`).join('')}
-          </datalist>
-
-          <select id="${day}-grams-select" class="border border-gray-200 p-2 rounded-lg w-32 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg">
-            ${Array.from({length:21},(_,i)=>i*50).map(g=>`<option value="${g}">${g}g</option>`).join('')}
+        <!-- Food input/select -->
+        <div class="flex gap-2 mb-2">
+          <input 
+            type="text"
+            placeholder="Search or select food"
+            class="border border-gray-200 p-2 rounded-lg flex-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            oninput="showDropdown('${day}', this.value)"
+            id="${day}-input"
+          >
+          <select id="${day}-grams" class="border border-gray-200 p-2 rounded-lg w-24 focus:outline-none focus:ring-2 focus:ring-blue-400">
+            ${Array.from({length:21},(_,i)=>`<option value="${i*50}">${i*50}g</option>`).join('')}
           </select>
-
-          <input type="number" id="${day}-grams-input" class="border border-gray-200 p-2 rounded-lg w-24 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg" placeholder="Custom g">
-
-          <button class="bg-blue-500 text-white py-2 px-3 rounded-lg hover:bg-blue-600 transition" onclick="addFood('${day}')">Add</button>
+          <input type="number" id="${day}-customgrams" class="border border-gray-200 p-2 rounded-lg w-24 focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="grams">
+          <button onclick="addFood('${day}')" class="bg-blue-500 text-white px-3 rounded-lg hover:bg-blue-600 transition">Add</button>
         </div>
+
+        <div id="${day}-dropdown" class="absolute bg-white border rounded-lg shadow w-full z-10 hidden max-h-48 overflow-y-auto"></div>
 
         <ul class="text-sm mt-3 space-y-1">
           ${entries.map((e,i)=>`
             <li class="flex justify-between items-center bg-gray-50 px-3 py-2 rounded-lg">
-              <span>${e.name} (${e.grams}g)</span>
+              <span>${e.name} (${e.qty}g)</span>
               <div class="flex items-center gap-2">
                 <span class="text-gray-600">${e.cal}</span>
                 <button class="text-red-500 hover:text-red-700" onclick="remove('${day}',${i})">x</button>
@@ -121,26 +129,59 @@ function render() {
 
   document.getElementById("days").innerHTML = html;
   document.getElementById("weeklyTotal").innerText = "Weekly Total: " + weeklyTotal;
+
+  // Animate bars after DOM updated
+  days.forEach(day => {
+    const bar = document.getElementById(day + "-bar");
+    if(bar) {
+      bar.style.transition = "width 0.7s ease";
+      setTimeout(()=>{bar.style.width = barWidths[day] + "%"},50);
+    }
+  });
+
   document.getElementById("summaryTable").innerHTML = summaryHTML;
 }
 
+// Search dropdown
+function showDropdown(day, value) {
+  const dropdown = document.getElementById(day + "-dropdown");
+  if(!value) return dropdown.classList.add("hidden");
+
+  let input = value.toLowerCase();
+  let results = Object.keys(foods).filter(f=>f.includes(input)).slice(0,5);
+  if(results.length===0) return dropdown.classList.add("hidden");
+
+  dropdown.innerHTML = results.map(food=>`
+    <div class="p-2 hover:bg-gray-100 cursor-pointer"
+      onclick="selectFood('${day}','${food}')">
+      ${food} (${foods[food]} cal/100g)
+    </div>
+  `).join('');
+  dropdown.classList.remove("hidden");
+}
+
+function selectFood(day, food){
+  document.getElementById(day+"-input").value = food;
+  document.getElementById(day+"-dropdown").classList.add("hidden");
+}
+
 function addFood(day){
-  const foodCombo = document.getElementById(day+'-food-combo');
-  let food = foodCombo.value.trim();
-  if(!food || !foods[food]) { alert('Please select a valid food'); return; }
+  let food = document.getElementById(day+"-input").value.toLowerCase();
+  let selectGrams = parseInt(document.getElementById(day+"-grams").value) || 0;
+  let customGrams = parseInt(document.getElementById(day+"-customgrams").value) || 0;
+  let grams = customGrams || selectGrams;
+  if(!foods[food] || grams<=0) return alert("Select food and grams");
 
-  const gramsSelect = document.getElementById(day+'-grams-select');
-  const gramsInput = document.getElementById(day+'-grams-input');
-  let grams = parseInt(gramsInput.value) || parseInt(gramsSelect.value) || 0;
-  if(grams===0) { alert('Please select or enter grams'); return; }
-
+  if(!data[day]) data[day] = [];
   let cal = Math.round(foods[food]*grams/100);
-
-  if(!data[day]) data[day]=[];
-  data[day].push({name:food,grams:grams,cal:cal});
+  data[day].push({name:food,qty:grams,cal});
   localStorage.setItem("calories",JSON.stringify(data));
 
-  foodCombo.value=''; gramsInput.value=''; gramsSelect.value=0;
+  // reset inputs
+  document.getElementById(day+"-input").value = "";
+  document.getElementById(day+"-grams").value = 0;
+  document.getElementById(day+"-customgrams").value = "";
+
   render();
 }
 
