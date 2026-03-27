@@ -142,17 +142,19 @@ function render(){
   days.forEach(day=>{
     let d=document.getElementById(day+"-drop");
     d.innerHTML=Object.entries(foods)
-      .map(([f,c])=>`<div class="p-2 hover:bg-gray-100"
+      .map(([f,c])=>`<div class="p-2 hover:bg-gray-100 cursor-pointer"
         onclick="pick('${day}','${f}')">
         ${f} (${c}/100g)
       </div>`).join("");
   });
 }
 
+// OPEN
 function openDrop(day){
   document.getElementById(day+"-drop").classList.remove("hidden");
 }
 
+// FILTER
 function filterDrop(day){
   let val=document.getElementById(day+"-food").value.toLowerCase();
   let items=document.getElementById(day+"-drop").children;
@@ -161,11 +163,13 @@ function filterDrop(day){
   }
 }
 
+// SELECT
 function pick(day,f){
   document.getElementById(day+"-food").value=f;
   document.getElementById(day+"-drop").classList.add("hidden");
 }
 
+// ADD
 function add(day){
   let f=document.getElementById(day+"-food").value;
   let g=parseInt(document.getElementById(day+"-cg").value)||parseInt(document.getElementById(day+"-g").value);
@@ -179,23 +183,41 @@ function add(day){
   render();
 }
 
+// DELETE
 function del(day,i){
   data[day].splice(i,1);
   localStorage.setItem("calories",JSON.stringify(data));
   render();
 }
 
+// GOAL
 function setGoal(day,v){
   goals[day]=parseInt(v)||0;
   localStorage.setItem("goals",JSON.stringify(goals));
   render();
 }
 
+// RESET
 function resetWeek(){
   data={}; localStorage.clear(); render();
 }
 
+// 🔥 CLICK OUTSIDE FIX
+document.addEventListener("click", function(e) {
+  days.forEach(day => {
+    const input = document.getElementById(day + "-food");
+    const dropdown = document.getElementById(day + "-drop");
+
+    if (!input || !dropdown) return;
+
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.classList.add("hidden");
+    }
+  });
+});
+
 render();
 </script>
+
 </body>
 </html>
