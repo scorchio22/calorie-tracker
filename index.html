@@ -31,8 +31,8 @@
 
 </div>
 
-<!-- Reset button sticky bottom -->
-<div class="w-full flex justify-center p-4">
+<!-- Sticky Reset button -->
+<div class="fixed bottom-4 w-full flex justify-center z-50">
   <button class="bg-red-500 text-white py-2 px-4 rounded-xl shadow hover:bg-red-600 transition"
     onclick="resetWeek()">
     Reset Week
@@ -138,7 +138,6 @@ function showDropdown(day, value) {
     </div>
   `).join('');
 
-  // Ensure dropdown is fully visible on small screens
   const rect = dropdown.getBoundingClientRect();
   const bottom = window.innerHeight - rect.bottom;
   if(bottom < 0) dropdown.style.top = `${rect.top + bottom - 10}px`;
