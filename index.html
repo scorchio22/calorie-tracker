@@ -6,12 +6,6 @@
 
   <!-- Mobile viewport fix -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <style>
-    /* Custom scrollbar for dropdowns */
-    .custom-scroll::-webkit-scrollbar { width: 6px; }
-    .custom-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
-    .transition-width { transition: width 0.6s ease; }
-  </style>
 </head>
 
 <body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen flex flex-col items-center p-4 sm:p-6 md:p-8">
@@ -38,7 +32,7 @@
 </div>
 
 <!-- Reset button sticky bottom -->
-<div id="resetContainer" class="w-full flex justify-center p-4 sticky bottom-0 bg-gradient-to-t from-gray-200/90 backdrop-blur-sm">
+<div class="w-full flex justify-center p-4">
   <button class="bg-red-500 text-white py-2 px-4 rounded-xl shadow hover:bg-red-600 transition"
     onclick="resetWeek()">
     Reset Week
@@ -54,9 +48,7 @@ const foods = {
 };
 let data = JSON.parse(localStorage.getItem("calories")) || {};
 let dailyGoals = JSON.parse(localStorage.getItem("dailyGoals")) || {};
-
-// Track previous progress bar widths
-let prevWidths = {};
+let prevPercents = {}; // store previous percent for animation
 
 function render() {
   let html = "";
@@ -70,6 +62,10 @@ function render() {
 
     let goal = dailyGoals[day] || 0;
     let percent = goal ? (total/goal)*100 : 0;
+
+    // Animated progress
+    let prev = prevPercents[day] || 0;
+    prevPercents[day] = percent;
 
     let color = "bg-green-400";
     if(percent >= 80 && percent < 100) color = "bg-yellow-400";
@@ -93,28 +89,33 @@ function render() {
           onchange="setDailyGoal('${day}', this.value)">
 
         <div class="w-full bg-gray-200 h-3 rounded-full mb-1 overflow-hidden">
-          <div id="${day}-bar" class="${color} h-3 rounded-full transition-width" style="width:${prevWidths[day]||0}%"></div>
+          <div id="${day}-progress" class="${color} h-3 rounded-full" style="width:${prev}%"></div>
         </div>
-        <div class="text-xs text-gray-500 mb-3" id="${day}-percent">${Math.round(percent||0)}%</div>
+        <div class="text-xs text-gray-500 mb-3">${Math.round(percent||0)}%</div>
 
+        <!-- Food + Grams Row -->
         <div class="flex gap-2 items-center mb-2">
-          <div class="flex-1 relative">
-            <input type="text" placeholder="Search food"
-              class="border border-gray-200 p-3 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg"
-              oninput="filterFood('${day}', this.value)"
-              onclick="toggleDropdown('${day}')"
-              id="${day}-food-input"
-              autocomplete="off">
-            <div id="${day}-dropdown" class="absolute bg-white border rounded-lg shadow w-full z-10 hidden max-h-48 overflow-y-auto custom-scroll"></div>
-          </div>
 
-          <select id="${day}-grams-dropdown" class="border border-gray-200 p-2 rounded-lg text-base sm:text-lg w-24">
-            ${Array.from({length:21},(_,i)=>`<option value="${i*50}">${i*50}g</option>`).join('')}
+          <!-- Food dropdown + search -->
+          <input list="${day}-foodlist" placeholder="Search or pick food"
+            class="border border-gray-200 p-3 rounded-lg flex-1 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg"
+            id="${day}-input">
+          <datalist id="${day}-foodlist">
+            ${Object.keys(foods).map(food=>`<option value="${food}">`).join('')}
+          </datalist>
+
+          <!-- Grams dropdown -->
+          <select id="${day}-grams" class="border border-gray-200 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg">
+            ${Array.from({length:21},(_,i)=>i*50).map(g=>`<option value="${g}">${g} g</option>`).join('')}
           </select>
 
-          <input type="number" id="${day}-grams-custom" placeholder="g" class="border border-gray-200 p-2 rounded-lg w-20 text-base sm:text-lg">
+          <!-- Custom grams input -->
+          <input type="number" id="${day}-custom-grams" placeholder="Custom g"
+            class="border border-gray-200 p-3 rounded-lg w-20 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base sm:text-lg">
 
-          <button class="bg-blue-500 text-white py-2 px-3 rounded-xl shadow hover:bg-blue-600 transition" onclick="addFood('${day}')">
+          <!-- Add button -->
+          <button class="bg-blue-500 text-white py-2 px-3 rounded-xl shadow hover:bg-blue-600 transition text-base sm:text-lg"
+            onclick="addFood('${day}')">
             Add
           </button>
         </div>
@@ -122,7 +123,7 @@ function render() {
         <ul class="text-sm mt-3 space-y-1">
           ${entries.map((e,i)=>`
             <li class="flex justify-between items-center bg-gray-50 px-3 py-2 rounded-lg">
-              <span>${e.name} (${e.qty}g)</span>
+              <span>${e.name} (${e.qty} g)</span>
               <div class="flex items-center gap-2">
                 <span class="text-gray-600">${e.cal}</span>
                 <button class="text-red-500 hover:text-red-700" onclick="remove('${day}',${i})">x</button>
@@ -137,64 +138,45 @@ function render() {
 
   document.getElementById("days").innerHTML = html;
   document.getElementById("weeklyTotal").innerText = "Weekly Total: " + weeklyTotal;
+
   document.getElementById("summaryTable").innerHTML = summaryHTML;
 
-  // Animate progress bars
+  // Animate progress bars from previous percent to current
   days.forEach(day=>{
-    const bar=document.getElementById(day+'-bar');
-    const percent=Math.min(dailyGoals[day]? (data[day]?.reduce((a,b)=>a+b.cal,0)/dailyGoals[day])*100 : 0,100);
-    bar.style.width = prevWidths[day] || 0 + '%';
-    setTimeout(()=>{bar.style.width = percent + '%'; prevWidths[day]=percent;},50);
-    document.getElementById(day+'-percent').innerText=Math.round(percent||0)+'%';
+    const bar = document.getElementById(`${day}-progress`);
+    const percent = Math.min((dailyGoals[day]?data[day].reduce((a,b)=>a+b.cal,0)/dailyGoals[day]*100:0),100);
+    bar.style.transition = "width 1s ease-in-out";
+    setTimeout(()=>{ bar.style.width = `${percent}%`; }, 50);
   });
 }
 
-function filterFood(day, value){
-  const dropdown=document.getElementById(day+'-dropdown');
-  if(!value) return dropdown.classList.add('hidden');
-  let results=Object.keys(foods).filter(f=>f.toLowerCase().includes(value.toLowerCase())).slice(0,20);
-  if(results.length===0) return dropdown.classList.add('hidden');
-  dropdown.innerHTML=results.map(f=>`<div class="p-2 hover:bg-gray-100 cursor-pointer" onclick="selectFood('${day}','${f}')">${f} (${foods[f]} cal/100g)</div>`).join('');
-  dropdown.classList.remove('hidden');
-}
-
-function toggleDropdown(day){
-  const dropdown=document.getElementById(day+'-dropdown');
-  dropdown.classList.toggle('hidden');
-}
-
-function selectFood(day, food){
-  document.getElementById(day+'-food-input').value=food;
-  document.getElementById(day+'-dropdown').classList.add('hidden');
-}
-
 function addFood(day){
-  const foodInput=document.getElementById(day+'-food-input');
-  const gramsDropdown=document.getElementById(day+'-grams-dropdown');
-  const gramsCustom=document.getElementById(day+'-grams-custom');
-  const foodName=foodInput.value;
-  if(!foods[foodName]) return alert('Select valid food');
+  const foodName = document.getElementById(`${day}-input`).value.toLowerCase();
+  let qty = parseInt(document.getElementById(`${day}-grams`).value) || 0;
+  const customQty = parseInt(document.getElementById(`${day}-custom-grams`).value);
+  if(!isNaN(customQty) && customQty>0) qty = customQty;
 
-  const grams=Number(gramsCustom.value)||Number(gramsDropdown.value);
-  if(!grams || grams<=0) return alert('Select grams > 0');
-
-  const cal=Math.round(foods[foodName]*grams/100);
-  if(!data[day]) data[day]=[];
-  data[day].push({name:foodName,qty:grams,cal});
-  localStorage.setItem('calories',JSON.stringify(data));
-  foodInput.value=''; gramsCustom.value=''; gramsDropdown.value='0';
-  render();
+  const found = Object.keys(foods).find(f=>f===foodName);
+  if(found){
+    if(!data[day]) data[day]=[];
+    data[day].push({name:found,qty:qty,cal:Math.round(foods[found]*qty/100)});
+    localStorage.setItem("calories",JSON.stringify(data));
+    document.getElementById(`${day}-input`).value="";
+    document.getElementById(`${day}-grams`).value = 0;
+    document.getElementById(`${day}-custom-grams`).value = "";
+    render();
+  }
 }
 
 function remove(day,i){
   data[day].splice(i,1);
-  localStorage.setItem('calories',JSON.stringify(data));
+  localStorage.setItem("calories",JSON.stringify(data));
   render();
 }
 
 function setDailyGoal(day,val){
   dailyGoals[day]=parseInt(val)||0;
-  localStorage.setItem('dailyGoals',JSON.stringify(dailyGoals));
+  localStorage.setItem("dailyGoals",JSON.stringify(dailyGoals));
   render();
 }
 
