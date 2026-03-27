@@ -4,18 +4,34 @@
   <title>Calorie Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    /* Progress bar animation */
+    .progress-bar {
+      transition: width 1s ease-in-out;
+    }
+
+    /* Sticky reset button */
+    .sticky-reset {
+      position: sticky;
+      bottom: 10px;
+      z-index: 50;
+    }
+  </style>
 </head>
 
 <body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen flex flex-col items-center p-4 sm:p-6 md:p-8">
 
 <div class="w-full max-w-xl flex-1">
 
-<h1 class="text-4xl font-extrabold text-center mb-6 text-gray-800">Calorie Tracker</h1>
+<h1 class="text-4xl font-extrabold text-center mb-6 text-gray-800">
+  Calorie Tracker
+</h1>
 
 <div id="days" class="space-y-5"></div>
 
 <h2 id="weeklyTotal" class="text-2xl font-semibold text-center mt-8 text-gray-700 break-words"></h2>
 
+<!-- SUMMARY -->
 <div class="mt-6 bg-white p-5 rounded-2xl shadow-lg overflow-x-auto">
   <h3 class="font-bold text-lg mb-3 text-gray-800">Weekly Summary</h3>
   <table class="min-w-full text-sm text-gray-700">
@@ -26,7 +42,7 @@
 </div>
 
 <!-- Reset button sticky bottom -->
-<div class="w-full flex justify-center p-4">
+<div class="w-full flex justify-center p-4 sticky-reset">
   <button class="bg-red-500 text-white py-2 px-4 rounded-xl shadow hover:bg-red-600 transition"
     onclick="resetWeek()">
     Reset Week
@@ -40,14 +56,10 @@ const foods = {
   "potato": 77,"salmon": 206,"broccoli": 34,"carrot": 41,
   "bread": 265,"cheese": 402,"milk": 61
 };
+
 let data = JSON.parse(localStorage.getItem("calories")) || {};
 let dailyGoals = JSON.parse(localStorage.getItem("dailyGoals")) || {};
-
-function getColorClass(percent){
-  if(percent>=100) return "bg-red-500";
-  if(percent>=80) return "bg-yellow-400";
-  return "bg-green-400";
-}
+let currentWidths = {}; // store current widths of progress bars
 
 function render() {
   let html = "";
@@ -61,6 +73,11 @@ function render() {
 
     let goal = dailyGoals[day] || 0;
     let percent = goal ? (total/goal)*100 : 0;
+
+    let color = "bg-green-400";
+    if(percent >= 80 && percent < 100) color = "bg-yellow-400";
+    if(percent >= 100) color = "bg-red-500";
+
     let displayPercent = Math.min(percent,100);
 
     summaryHTML += `<tr class="border-b"><td class="py-1">${day}</td><td>${total}</td></tr>`;
@@ -79,10 +96,7 @@ function render() {
           onchange="setDailyGoal('${day}', this.value)">
 
         <div class="w-full bg-gray-200 h-3 rounded-full mb-1 overflow-hidden">
-          <div id="${day}-bar" class="progress-inner h-3 rounded-full transition-all duration-[1500] delay-75"
-               style="width:0%;"
-               data-prev="0">
-          </div>
+          <div id="${day}-bar" class="progress-bar ${color} h-3 rounded-full" style="width: ${currentWidths[day]||0}%"></div>
         </div>
         <div class="text-xs text-gray-500 mb-3">${Math.round(percent||0)}%</div>
 
@@ -117,19 +131,24 @@ function render() {
   document.getElementById("weeklyTotal").innerText = "Weekly Total: " + weeklyTotal;
   document.getElementById("summaryTable").innerHTML = summaryHTML;
 
-  // Animate progress bars from previous value
-  days.forEach(day=>{
-    let bar = document.getElementById(day+"-bar");
-    let prev = parseFloat(bar.getAttribute("data-prev")) || 0;
+  // Animate progress bars from current width to new width
+  days.forEach(day => {
     let goal = dailyGoals[day] || 0;
     let total = (data[day] || []).reduce((a,b)=>a+b.cal,0);
     let percent = goal ? (total/goal)*100 : 0;
     let displayPercent = Math.min(percent,100);
-    bar.setAttribute("data-prev", displayPercent);
-    bar.className = `progress-inner ${getColorClass(displayPercent)} h-3 rounded-full transition-all duration-[1500] delay-75`;
-    requestAnimationFrame(()=>{ 
-      bar.style.width = displayPercent+"%";
-    });
+
+    const bar = document.getElementById(`${day}-bar`);
+    if(bar){
+      const startWidth = currentWidths[day] || 0;
+      const endWidth = displayPercent;
+      bar.style.width = startWidth + "%";
+
+      setTimeout(()=>{
+        bar.style.width = endWidth + "%";
+        currentWidths[day] = endWidth;
+      }, 50); // small delay for animation effect
+    }
   });
 }
 
@@ -150,10 +169,6 @@ function showDropdown(day, value) {
       ${food} x${qty} (${foods[food]*qty} cal)
     </div>
   `).join('');
-
-  const rect = dropdown.getBoundingClientRect();
-  const bottom = window.innerHeight - rect.bottom;
-  if(bottom < 0) dropdown.style.top = `${rect.top + bottom - 10}px`;
 
   dropdown.classList.remove("hidden");
 }
@@ -193,6 +208,7 @@ function resetWeek(){
   if(confirm("Reset everything?")){
     data={};
     localStorage.clear();
+    currentWidths={};
     render();
   }
 }
